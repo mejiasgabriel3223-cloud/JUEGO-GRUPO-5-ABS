@@ -1,0 +1,50 @@
+{
+  "recursos": {
+    "fondo": "assets/Fondo pista.jpeg",
+    "titulo": ""
+  },
+  "estilos": {
+    "fuente_titulo_tamano": 82,
+    "fuente_opcion_tamano": 46,
+    "fuente_instruccion_tamano": 26,
+    "color_titulo": [255, 255, 255],
+    "color_instruccion": [220, 220, 220],
+    "color_texto_input": [255, 220, 100]
+  },
+  "opciones_principal": [
+    {
+      "texto": "JUGAR",
+      "accion": "JUGAR",
+      "color_normal": [200, 200, 200],
+      "color_seleccionado": [255, 215, 0],
+      "tamano_fuente": 46
+    },
+    {
+      "texto": "RECORDS",
+      "accion": "PANTALLA_RECORDS",
+      "color_normal": [200, 200, 200],
+      "color_seleccionado": [255, 215, 0],
+      "tamano_fuente": 46
+    },
+    {
+      "texto": "CREDITOS",
+      "accion": "PANTALLA_TEXTO",
+      "texto_pantalla": "Creditos",
+      "contenido": [
+        "Desarrollado por Gabriel Mejias",
+        "Universidad de Oriente",
+        "Ingenieria de Sistemas"
+      ],
+      "color_normal": [200, 200, 200],
+      "color_seleccionado": [255, 215, 0],
+      "tamano_fuente": 46
+    },
+    {
+      "texto": "SALIR",
+      "accion": "SALIR",
+      "color_normal": [200, 200, 200],
+      "color_seleccionado": [255, 215, 0],
+      "tamano_fuente": 46
+    }
+  ]
+}
