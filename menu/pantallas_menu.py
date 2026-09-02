@@ -1,5 +1,6 @@
 import pygame
 from abc import ABC, abstractmethod
+from menu.gestor_config import GestorConfig
 
 class PantallaBase(ABC):
     def __init__(self, gestor_estado, config):
@@ -36,13 +37,15 @@ class PantallaPrincipal(PantallaBase):
         super().__init__(gestor_estado, config)
         self.opciones = self.config.get("opciones_principal", [])
         self.indice_seleccionado = 0
-        
-        ruta_logo = self.config.get("recursos", {}).get("titulo", "")
+
+        ruta_logo = GestorConfig.resolver_ruta(self.config.get("recursos", {}).get("titulo", ""))
         self.logo = None
         try:
-            raw_logo = pygame.image.load(ruta_logo).convert_alpha()
-            self.logo = raw_logo.subsurface(raw_logo.get_bounding_rect()).copy()
-        except: pass
+            if ruta_logo:
+                raw_logo = pygame.image.load(ruta_logo).convert_alpha()
+                self.logo = raw_logo.subsurface(raw_logo.get_bounding_rect()).copy()
+        except Exception:
+            pass
 
     def manejar_eventos(self, eventos):
         for evento in eventos:

@@ -4,7 +4,7 @@ from pathlib import Path
 from menu.gestor_config import GestorConfig
 from menu.pantallas_menu import PantallaPrincipal, PantallaInputNombre, PantallaRecords, PantallaPromptRecord
 
-BASE_DIR = Path(__file__).parent.parent 
+BASE_DIR = Path(__file__).resolve().parent.parent
 IMAGENES_DIR = BASE_DIR / "assets"
 
 class EstadoMenu:
@@ -13,7 +13,7 @@ class EstadoMenu:
         self.config = GestorConfig.cargar_configuracion()
         self.senal_salida = None
         self.player_name = "Jugador"
-        
+
         # Sistema de Records
         self.records_file = BASE_DIR / "records.json"
         self.records = self._cargar_records()
@@ -23,15 +23,13 @@ class EstadoMenu:
 
         # Cargar recursos base
         recursos = self.config.get("recursos", {})
-        ruta_fondo = recursos.get("fondo", "")
-        
-        if ruta_fondo and not Path(ruta_fondo).is_absolute():
-            ruta_fondo = str(BASE_DIR / ruta_fondo)
+        ruta_fondo = GestorConfig.resolver_ruta(recursos.get("fondo", ""))
 
         self.fondo = None
         try:
-            self.fondo = pygame.image.load(ruta_fondo).convert()
-        except:
+            if ruta_fondo:
+                self.fondo = pygame.image.load(ruta_fondo).convert()
+        except Exception:
             self.fondo = pygame.Surface(pantalla.get_size())
             self.fondo.fill((20, 40, 80))
 
