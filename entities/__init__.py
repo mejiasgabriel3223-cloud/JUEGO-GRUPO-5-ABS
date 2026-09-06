@@ -1,27 +1,18 @@
-"""API publica del dominio del juego."""
-from .base import Entity, ScoreContext
-from .card import PlayingCard, Rank, Suit
-from .deck import Deck
-from .factory import StandardDeckFactory
-from .hand import Hand
-from .joker import FlatChipsJoker, Joker, MultiplierJoker
-from .player import Player
-from .round import RoundState
-from .scoring import HandEvaluator
+"""Public API for the game's entity layer."""
+
+from .entities import CardEntity, EntityCollection
+from .card_factory import CardFactory
+from .jokers import Joker, FlatChipsJoker, MultiplierJoker, RandomJokerPool
+from .rules import GameRules, HandResult
 
 __all__ = [
-    "Entity",
-    "ScoreContext",
-    "PlayingCard",
-    "Rank",
-    "Suit",
-    "Deck",
-    "StandardDeckFactory",
-    "Hand",
+    "CardEntity",
+    "EntityCollection",
+    "CardFactory",
     "Joker",
     "FlatChipsJoker",
     "MultiplierJoker",
-    "Player",
-    "RoundState",
-    "HandEvaluator",
+    "RandomJokerPool",
+    "GameRules",
+    "HandResult",
 ]

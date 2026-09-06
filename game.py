@@ -1,81 +1,115 @@
-"""Nucleo jugable de cartas.
+"""Integration adapter between the existing game shell and the entity layer.
 
-Mantiene el nombre CarreraDeObstaculos por compatibilidad con el main.py
-existente, pero internamente implementa el juego de cartas del proyecto.
+The existing ``main.py`` keeps using ``CarreraDeObstaculos`` for compatibility.
+This module preserves that public interface while delegating card state,
+scoring, dynamic collections and Joker behaviour to ``entities``.
 """
+
 from __future__ import annotations
 
+from pathlib import Path
 import pygame
 
 from Renderer import Renderer
-from entities import (
-    FlatChipsJoker,
-    HandEvaluator,
-    MultiplierJoker,
-    Player,
-    RoundState,
-    StandardDeckFactory,
-)
+from entities import CardEntity, CardFactory, EntityCollection, GameRules, RandomJokerPool, FlatChipsJoker, MultiplierJoker
 
 
 class SelectorDummy:
-    """Selector provisional mantenido para no romper el flujo actual del menu."""
-
-    def __init__(self) -> None:
-        self.title_font = pygame.font.SysFont("Arial", 42, bold=True)
-        self.font = pygame.font.SysFont("Arial", 24)
+    """Compatibility selector expected by the existing menu state machine."""
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN and event.key in (pygame.K_RETURN, pygame.K_SPACE):
-            return "Jugador"
+            return "Player"
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             return None
         return None
 
     def draw(self, screen):
         screen.fill((35, 62, 50))
-        title = self.title_font.render("Mesa de cartas", True, (255, 255, 255))
-        prompt = self.font.render("ENTER o ESPACIO para comenzar", True, (230, 230, 230))
-        help_text = self.font.render("ESC para volver al menu", True, (190, 200, 190))
+        title_font = pygame.font.SysFont("Arial", 42, bold=True)
+        font = pygame.font.SysFont("Arial", 24)
+        title = title_font.render("Card Table", True, (255, 255, 255))
+        prompt = font.render("ENTER or SPACE to start", True, (230, 230, 230))
+        help_text = font.render("ESC to return to menu", True, (190, 200, 190))
         screen.blit(title, title.get_rect(center=(640, 250)))
         screen.blit(prompt, prompt.get_rect(center=(640, 330)))
         screen.blit(help_text, help_text.get_rect(center=(640, 380)))
 
 
-class CardGame:
-    """Controlador de alto nivel: orquesta entidades y renderer."""
+class CarreraDeObstaculos:
+    """Backward-compatible game controller powered by the new entities."""
+
+    MAX_HAND_SIZE = 8
+    MAX_PLAY_SIZE = 5
 
     def __init__(self, screen):
         self.screen = screen
         self.renderer = Renderer(*screen.get_size(), screen=screen)
         self.sound_player = None
-        self.player_name = "Jugador"
+        self.player_name = "Player"
         self.personaje_actual = None
-        self.player = Player(self.player_name)
-        self.round_state = RoundState()
         self.selector = SelectorDummy()
-        self.last_hand_name = "Carta alta"
-        self.message = "Selecciona 1 a 5 cartas y presiona ESPACIO"
         self.running_round = False
+        self.message = "Select 1 to 5 cards and press SPACE"
+        self.last_hand_name = "High Card"
+        self.round_number = 1
+        self.target = 100
+        self.hands_left = 4
+        self.discards_left = 3
+        self.round_score = 0
+        self.rules = GameRules()
+        self.card_factory = CardFactory(self._project_root())
+        self.cards = EntityCollection[CardEntity]()
+        self.jokers = RandomJokerPool()
         self.reset_game()
 
     @property
     def score(self) -> int:
-        return self.player.round_score
+        """Expose score for the existing main.py record handling."""
+        return self.round_score
+
+    @property
+    def hand(self):
+        """Compatibility alias for code that refers to the current card pool."""
+        return self.cards
+
+    def _project_root(self) -> Path:
+        return Path(__file__).resolve().parent
 
     def reset_game(self):
-        self.player = Player(self.player_name)
-        self.player.jokers = [FlatChipsJoker(20), MultiplierJoker(2)]
-        self.round_state = RoundState()
-        self.last_hand_name = "Carta alta"
-        self.message = "Selecciona 1 a 5 cartas y presiona ESPACIO"
-        self._start_round()
+        self.round_number = 1
+        self.target = 100
+        self.hands_left = 4
+        self.discards_left = 3
+        self.round_score = 0
+        self.rules.reset()
+        self.jokers = RandomJokerPool([
+            FlatChipsJoker(amount=5, probability=0.75),
+            MultiplierJoker(amount=0.25, probability=0.60),
+        ])
         self.running_round = True
+        self._start_round()
+        self.message = "Select 1 to 5 cards and press SPACE"
 
     def _start_round(self):
-        self.player.reset_round_resources()
-        self.player.deck = StandardDeckFactory.create()
-        self.player.hand.add_many(self.player.deck.draw_many(self.player.hand.MAX_SIZE))
+        self.cards = EntityCollection[CardEntity](
+            self.card_factory.create_random_collection(self.MAX_HAND_SIZE)
+        )
+        self.cards.shuffle()
+
+    def _select_card_at(self, position):
+        self._sync_card_rects()
+        for card in reversed(self.cards.copy()):
+            if card.rect is not None and card.rect.collidepoint(position):
+                selected_count = sum(1 for item in self.cards if item.selected)
+                if not card.selected and selected_count >= self.MAX_PLAY_SIZE:
+                    self.message = "You can select at most 5 cards"
+                    return
+                card.toggle_selected()
+                return
+
+    def _selected_cards(self) -> list[CardEntity]:
+        return [card for card in self.cards if card.selected]
 
     def handle_events(self, events):
         for event in events:
@@ -83,134 +117,138 @@ class CardGame:
                 if event.key == pygame.K_ESCAPE:
                     return "MENU"
                 if event.key in (pygame.K_SPACE, pygame.K_RETURN):
-                    return self.play_selected()
-                if event.key == pygame.K_d:
-                    return self.discard_selected()
+                    self.play_selected()
+                elif event.key == pygame.K_d:
+                    self.discard_selected()
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self._select_card_at(event.pos)
         return None
 
     def update(self, dt):
         if not self.running_round:
-            return None
-
-        if self.round_state.completed:
             return "GAMEOVER"
-
-        if self.player.round_score >= self.round_state.target:
-            self.round_state.advance()
-            if self.round_state.completed:
+        if self.round_score >= self.target:
+            self.round_number += 1
+            if self.round_number > 3:
                 self.running_round = False
-                self.message = "Victoria: has superado todas las rondas"
+                self.message = "Victory: all rounds completed"
                 return "GAMEOVER"
+            self.target = 100 * self.round_number
+            self.hands_left = 4
+            self.discards_left = 3
+            self.round_score = 0
+            self.rules.reset()
             self._start_round()
-            self.message = f"Ronda superada. Nuevo objetivo: {self.round_state.target}"
-
-        if self.player.hands_left <= 0 and self.player.round_score < self.round_state.target:
+            self.message = f"Round cleared. New target: {self.target}"
+        elif self.hands_left <= 0:
             self.running_round = False
-            self.message = "No quedan manos: GAME OVER"
+            self.message = "No hands left: GAME OVER"
             return "GAMEOVER"
         return None
 
     def play_selected(self):
-        selected = self.player.hand.selected_cards
-        if not 1 <= len(selected) <= 5:
-            self.message = "Debes seleccionar entre 1 y 5 cartas"
+        selected = self._selected_cards()
+        if not 1 <= len(selected) <= self.MAX_PLAY_SIZE:
+            self.message = "Select between 1 and 5 cards"
             return None
-        if self.player.hands_left <= 0:
-            self.message = "No quedan manos"
+        if self.hands_left <= 0:
+            self.message = "No hands left"
             return None
 
-        best_cards = HandEvaluator.best_five(selected)
-        hand_name, context = HandEvaluator.evaluate(best_cards)
-        final_context = HandEvaluator.apply_jokers(context, self.player.jokers)
-        self.player.last_chips = final_context.chips
-        self.player.last_multiplier = final_context.multiplier
-        self.player.round_score += final_context.score
-        self.player.hands_left -= 1
-        self.last_hand_name = hand_name
+        best = self.rules.best_five(selected)
+        self.rules.apply_result = self.rules.evaluate  # harmless adapter hook for integration
+        self.rules.evaluate(best)  # validate and establish the base result
+        activated = self.jokers.activate_all(EntityCollection(best))
+        result = self.rules.evaluate(best)
 
-        self.player.hand.remove_selected()
-        self._refill_hand()
-        self.message = f"{hand_name}: +{final_context.score} puntos"
-        return None
+        self.last_hand_name = result.name
+        self.round_score += result.total
+        self.hands_left -= 1
+
+        # Played cards leave the active array; new cards refill it to the
+        # current hand size. The resulting collection is then randomized.
+        for card in selected:
+            self.cards.remove(card)
+        missing = self.MAX_HAND_SIZE - len(self.cards)
+        self.cards.add_many(self.card_factory.create_random_collection(missing))
+        self.cards.shuffle()
+
+        if activated:
+            self.message = f"{result.name}: {result.total} points | Jokers: {', '.join(activated)}"
+        else:
+            self.message = f"{result.name}: {result.total} points"
+
+        return result.total
 
     def discard_selected(self):
-        selected = self.player.hand.selected_cards
+        selected = self._selected_cards()
         if not selected:
-            self.message = "Selecciona cartas para descartar"
+            self.message = "Select cards to discard"
             return None
-        if self.player.discards_left <= 0:
-            self.message = "No quedan descartes"
+        if self.discards_left <= 0:
+            self.message = "No discards left"
             return None
-        self.player.hand.remove_selected()
-        self.player.discards_left -= 1
-        self._refill_hand()
-        self.message = f"Descartaste {len(selected)} carta(s)"
-        return None
 
-    def _refill_hand(self):
-        needed = self.player.hand.MAX_SIZE - len(self.player.hand)
-        self.player.hand.add_many(self.player.deck.draw_many(needed))
+        for card in selected:
+            self.cards.remove(card)
+        self.discards_left -= 1
 
-    def _select_card_at(self, pos):
+        missing = self.MAX_HAND_SIZE - len(self.cards)
+        self.cards.add_many(self.card_factory.create_random_collection(missing))
+        self.cards.shuffle()
+        self.message = f"Discarded {len(selected)} cards"
+        return len(selected)
+
+    def _sync_card_rects(self) -> None:
+        """Keep entity Rects aligned with the existing Renderer hand layout."""
         spacing = 95
-        start_x = (self.renderer.width - (len(self.player.hand.cards) * spacing)) // 2 + 100
-        start_y = self.renderer.height - 160
-        for index, _card in enumerate(self.player.hand.cards):
-            x = start_x + index * spacing
-            y = start_y - (20 if _card.selected else 0)
-            rect = pygame.Rect(x, y, 90, 130)
-            if rect.collidepoint(pos):
-                self.player.hand.toggle(index)
-                return
+        start_x = (self.screen.get_width() - (len(self.cards) * spacing)) // 2 + 100
+        start_y = self.screen.get_height() - 160
+        for index, card in enumerate(self.cards):
+            card.rect.x = start_x + index * spacing
+            card.rect.y = start_y - (20 if card.selected else 0)
 
-    def _update_record_summary(self):
-        # Se mantiene este metodo porque main.py existente lo llama.
-        # El guardado efectivo se realiza al volver al menu.
-        return self.player.round_score
+    def _card_dict(self, card: CardEntity) -> dict:
+        data = card.to_dict()
+        # Existing Renderer expects rank/suit text. CardEntity already stores
+        # the suit symbol, so no renderer-side adaptation is necessary.
+        return data
 
     def draw(self):
+        self._sync_card_rects()
         self.renderer.clear()
+        selected_cards = self._selected_cards()
+        result = self.rules.evaluate(selected_cards) if selected_cards else None
+        chips = result.score if result else self.round_score
+        mult = result.multiplier if result else self.rules.multiplier
         self.renderer.draw_hud_panel(
-            score=self.player.round_score,
-            target=self.round_state.target,
-            mult=self.player.last_multiplier,
-            chips=self.player.last_chips,
-            hands=self.player.hands_left,
-            discards=self.player.discards_left,
+            self.round_score,
+            self.target,
+            mult,
+            chips,
+            self.hands_left,
+            self.discards_left,
         )
-        self.renderer.draw_joker_bar([joker.to_dict() for joker in self.player.jokers])
-        self.renderer.draw_hand([card.to_dict() for card in self.player.hand.cards])
-        self._draw_footer()
+        self.renderer.draw_joker_bar([
+            {"name": joker.name, "active": joker.active}
+            for joker in self.jokers.jokers
+        ])
 
-    def _draw_footer(self):
-        font = pygame.font.SysFont("Arial", 21, bold=True)
-        small = pygame.font.SysFont("Arial", 18)
-        title = font.render(
-            f"{self.last_hand_name} | Ante {self.round_state.ante} | Ronda {self.round_state.round_number}/{self.round_state.max_rounds}",
-            True,
-            (255, 255, 255),
-        )
-        message = small.render(self.message, True, (230, 230, 230))
-        controls = small.render("Click: seleccionar | ESPACIO: jugar | D: descartar | ESC: menu", True, (190, 200, 200))
-        self.screen.blit(title, (290, 165))
-        self.screen.blit(message, (290, 195))
-        self.screen.blit(controls, (290, 690))
+        card_data = [self._card_dict(card) for card in self.cards]
+        self.renderer.draw_hand(card_data)
+        font = pygame.font.SysFont("Arial", 22, bold=True)
+        text = font.render(self.message, True, (255, 255, 255))
+        self.screen.blit(text, (300, self.screen.get_height() - 40))
+        self.renderer.present()
+
+    def _update_record_summary(self):
+        """Compatibility hook used by main.py when GAMEOVER is reached."""
+        return self.round_score
 
     def draw_gameover(self):
-        overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        self.screen.blit(overlay, (0, 0))
-        font = pygame.font.SysFont("Arial", 56, bold=True)
-        small = pygame.font.SysFont("Arial", 24)
-        title = font.render("GAME OVER", True, (255, 235, 235))
-        score = small.render(f"Puntuacion: {self.player.round_score}", True, (255, 255, 255))
-        help_text = small.render("ENTER reinicia | ESC vuelve al menu", True, (240, 240, 240))
-        self.screen.blit(title, title.get_rect(center=(640, 280)))
-        self.screen.blit(score, score.get_rect(center=(640, 350)))
-        self.screen.blit(help_text, help_text.get_rect(center=(640, 410)))
-
-
-# Compatibilidad con el main.py existente.
-CarreraDeObstaculos = CardGame
+        overlay_font = pygame.font.SysFont("Arial", 58, bold=True)
+        info_font = pygame.font.SysFont("Arial", 28)
+        title = overlay_font.render("GAME OVER", True, (255, 80, 80))
+        info = info_font.render("ENTER to play again | ESC for menu", True, (255, 255, 255))
+        self.screen.blit(title, title.get_rect(center=(640, 300)))
+        self.screen.blit(info, info.get_rect(center=(640, 370)))
