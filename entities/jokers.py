@@ -37,7 +37,7 @@ class Joker(ABC):
         if not self.active:
             return False
         # A probability of 1.0 always activates because random.random() is below 1.
-        if random.random() <= self.probability:
+        if random.random() < self.probability:
             return self.apply(cards)
         return False
 

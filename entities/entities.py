@@ -5,8 +5,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Generic, Iterable, Iterator, List, Optional, Sequence, TypeVar
+from uuid import uuid4
 
 T = TypeVar("T")
+
+# Single source of truth for numeric rank values shared by the factory and rules.
+RANK_VALUES = {str(value): value for value in range(2, 11)}
+RANK_VALUES.update({"J": 11, "Q": 12, "K": 13, "A": 14})
 
 
 class Entity(ABC):
@@ -40,13 +45,13 @@ class CardEntity(Entity):
     selected: bool = False
     asset_path: str = ""
     rect: object = None
-    _entity_id: str = field(default="", repr=False)
+    _entity_id: str = field(default_factory=lambda: uuid4().hex, repr=False)
 
     @property
     def entity_id(self) -> str:
         """Return the unique identifier assigned to this card instance."""
-        # A generated id is preferred; the rank/suit pair is the fallback.
-        return self._entity_id or f"{self.rank}-{self.suit}"
+        # The identifier is generated automatically for every card instance.
+        return self._entity_id
 
     @property
     def code(self) -> str:

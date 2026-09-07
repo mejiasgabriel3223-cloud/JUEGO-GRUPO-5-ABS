@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Sequence
 
-from .entities import CardEntity
+from .entities import CardEntity, RANK_VALUES
 
 
 @dataclass(frozen=True)
@@ -103,6 +103,8 @@ class GameRules:
 
     def best_five(self, cards: Sequence[CardEntity]) -> tuple[CardEntity, ...]:
         """Return the five-card combination with the highest calculated total."""
+        if not 1 <= len(cards):
+            raise ValueError("At least one card is required")
         if len(cards) <= 5:
             return tuple(cards)
         best = None
@@ -124,11 +126,9 @@ class GameRules:
     @staticmethod
     def _rank_value(rank: str) -> int:
         """Convert a rank label into its numeric comparison value."""
-        values = {str(value): value for value in range(2, 11)}
-        values.update({"J": 11, "Q": 12, "K": 13, "A": 14})
-        if rank not in values:
+        if rank not in RANK_VALUES:
             raise ValueError(f"Unknown rank: {rank}")
-        return values[rank]
+        return RANK_VALUES[rank]
 
     @staticmethod
     def _is_straight(unique_ranks: list[int]) -> bool:

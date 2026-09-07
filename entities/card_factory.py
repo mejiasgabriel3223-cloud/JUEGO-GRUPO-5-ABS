@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pygame
 
-from .entities import CardEntity
+from .entities import CardEntity, RANK_VALUES
 
 
 class CardFactory:
@@ -84,6 +84,4 @@ class CardFactory:
     @staticmethod
     def _base_score(rank: str) -> int:
         """Return the default numeric score assigned from the card rank."""
-        values = {str(value): value for value in range(2, 11)}
-        values.update({"J": 11, "Q": 12, "K": 13, "A": 14})
-        return values[rank]
+        return RANK_VALUES[rank]
