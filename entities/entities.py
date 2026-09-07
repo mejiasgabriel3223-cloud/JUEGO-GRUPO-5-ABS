@@ -1,10 +1,4 @@
-"""Core game entities and the dynamic entity collection.
-
-This module intentionally contains domain objects only. It does not import
-pygame, load files, or know how the interface is drawn. The collection is a
-small generic container that allows duplicates and can grow or shrink at
-runtime, which is important for deck modifications.
-"""
+"""Core domain entities and the dynamic collection used by the game."""
 
 from __future__ import annotations
 
@@ -16,27 +10,27 @@ T = TypeVar("T")
 
 
 class Entity(ABC):
-    """Abstract base class for every persistent game entity."""
+    """Define the common abstraction shared by persistent game entities."""
 
     @property
     @abstractmethod
     def entity_id(self) -> str:
-        """Return a stable identifier for the entity."""
+        """Return the identifier that distinguishes this entity instance."""
         raise NotImplementedError
 
 
 @dataclass
 class CardEntity(Entity):
-    """A single playable card.
+    """Represent one playable card and all mutable values attached to it.
 
-    A card is identified by its rank and suit, but duplicates are allowed:
-    two instances may represent the same rank/suit while remaining distinct
-    entities. ``score`` and ``multiplier`` are mutable per-card modifiers and
-    can be changed by Joker effects.
+    Composition:
+        - ``rank`` and ``suit`` identify the logical card.
+        - ``score`` and ``multiplier`` store modifiers that Jokers can change.
+        - ``asset_path`` stores the image location without loading the image.
+        - ``rect`` stores the visual position/size assigned by the factory.
 
-    The visual layer is represented by ``asset_path`` and ``rect``. The
-    entity does not load the image itself; the card factory creates the Rect
-    and the existing Renderer remains responsible for presentation.
+    Two cards may have the same rank and suit. They are still separate
+    instances because ``_entity_id`` identifies the individual entity.
     """
 
     rank: str
@@ -50,29 +44,33 @@ class CardEntity(Entity):
 
     @property
     def entity_id(self) -> str:
+        """Return the unique identifier assigned to this card instance."""
+        # A generated id is preferred; the rank/suit pair is the fallback.
         return self._entity_id or f"{self.rank}-{self.suit}"
 
     @property
     def code(self) -> str:
-        """Return a stable visual code such as ``AS`` or ``10H``."""
+        """Return the compact card code used by other game components."""
         return f"{self.rank}{self.suit}"
 
     def reset_modifiers(self) -> None:
-        """Restore the per-card score and multiplier modifiers."""
+        """Reset card-specific score and multiplier changes to their defaults."""
         self.score = 0
         self.multiplier = 1.0
 
     def apply_bonus(self, score_delta: int = 0, multiplier_delta: float = 0.0) -> None:
-        """Modify this card without replacing the entity instance."""
+        """Add score and multiplier changes without replacing the card object."""
+        # Convert incoming values so every card keeps consistent numeric types.
         self.score += int(score_delta)
         self.multiplier += float(multiplier_delta)
 
     def toggle_selected(self) -> bool:
+        """Toggle the selection flag and return its new state."""
         self.selected = not self.selected
         return self.selected
 
     def to_dict(self) -> dict:
-        """Return renderer-friendly data without importing the renderer."""
+        """Return renderer-friendly data while keeping rendering outside this module."""
         return {
             "id": self.entity_id,
             "rank": self.rank,
@@ -85,54 +83,61 @@ class CardEntity(Entity):
 
 
 class EntityCollection(Generic[T], Sequence[T]):
-    """Dynamic generic entity array that explicitly permits duplicates.
+    """Provide a dynamic generic array that intentionally accepts duplicates.
 
-    ``EntityCollection[T]`` is the reusable collection/"array of entities"
-    requested by the project design. It supports runtime insertion,
-    deletion, replacement, clearing and shuffling. No uniqueness rule is
-    imposed, so adding a second Ace of Spades is valid and intentional.
+    The collection represents the project's main entity container. Its size
+    can grow or shrink at runtime, which supports mechanics such as adding a
+    duplicate card or reducing the available card pool after a pack effect.
 
-    The generic type parameter is the project's template/generic mechanism:
-    the same container can hold cards or another future entity type.
+    ``T`` is the generic type parameter. It makes the same structure reusable
+    for cards or future entity types without duplicating the collection code.
     """
 
     def __init__(self, entities: Optional[Iterable[T]] = None) -> None:
+        """Create the collection from an optional iterable of initial entities."""
+        # Copy the input into a private list to protect internal state.
         self._items: List[T] = list(entities or [])
 
     def __len__(self) -> int:
+        """Return the current number of entities stored in the collection."""
         return len(self._items)
 
     def __getitem__(self, index: int) -> T:
+        """Return the entity located at ``index``."""
         return self._items[index]
 
     def __iter__(self) -> Iterator[T]:
+        """Return an iterator so the collection can be used in ``for`` loops."""
         return iter(self._items)
 
     def add(self, entity: T) -> None:
-        """Increase the collection size by one; duplicates are allowed."""
+        """Append one entity and increase the collection size by one."""
         self._items.append(entity)
 
     def add_many(self, entities: Iterable[T]) -> None:
+        """Append every entity received from an iterable."""
         for entity in entities:
             self.add(entity)
 
     def remove_at(self, index: int) -> T:
-        """Remove and return one element, decreasing the collection size."""
+        """Remove and return the entity at ``index``."""
         return self._items.pop(index)
 
     def remove(self, entity: T) -> None:
+        """Remove the first matching entity from the collection."""
         self._items.remove(entity)
 
     def resize(self, target_size: int, factory=None) -> None:
-        """Grow or shrink the collection; growth uses a supplied factory.
+        """Change collection length to ``target_size``.
 
-        The growth branch uses recursion so the collection can be expanded by
-        repeatedly creating one entity until the desired size is reached.
-        Shrinking is iterative because removal is not naturally recursive.
+        When growth is requested, ``factory`` must be a callable that creates
+        one new entity. The growth branch uses recursion to demonstrate the
+        required recursion pillar without coupling the collection to cards.
         """
         if target_size < 0:
             raise ValueError("target_size cannot be negative")
         if target_size < len(self):
+            # Truncate the private list to shrink the collection.
             del self._items[target_size:]
             return
         if target_size == len(self):
@@ -142,17 +147,23 @@ class EntityCollection(Generic[T], Sequence[T]):
         self._grow_recursive(target_size, factory)
 
     def _grow_recursive(self, target_size: int, factory) -> None:
+        """Recursively create one entity until ``target_size`` is reached."""
         if len(self) >= target_size:
             return
         self.add(factory())
+        # Continue until the requested dynamic size is reached.
         self._grow_recursive(target_size, factory)
 
     def shuffle(self) -> None:
+        """Randomly reorder the entities in place."""
         import random
+
         random.shuffle(self._items)
 
     def clear(self) -> None:
+        """Remove all entities while keeping the collection object usable."""
         self._items.clear()
 
     def copy(self) -> List[T]:
+        """Return a shallow copy of the stored entities."""
         return list(self._items)
