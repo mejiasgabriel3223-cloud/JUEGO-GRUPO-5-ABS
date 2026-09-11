@@ -1,7 +1,7 @@
 {
   "recursos": {
-    "fondo": "assets/fondo_menu.png",
-    "titulo": ""
+    "fondo": "assets/fondo_menu.mp4",
+    "titulo": "assets/titulo.png"
   },
   "estilos": {
     "fuente_titulo_tamano": 82,
@@ -15,15 +15,29 @@
     {
       "texto": "JUGAR",
       "accion": "JUGAR",
-      "color_normal": [200, 200, 200],
+      "color_normal": [240, 240, 240],
       "color_seleccionado": [255, 215, 0],
+      "fondo_normal": [27, 58, 95],
+      "fondo_seleccionado": [75, 124, 196],
+      "borde_color": [255, 255, 255],
+      "borde_ancho": 3,
+      "radio": 12,
+      "ancho": 180,
+      "alto": 80,
       "tamano_fuente": 46
     },
     {
       "texto": "RECORDS",
       "accion": "PANTALLA_RECORDS",
-      "color_normal": [200, 200, 200],
+      "color_normal": [240, 240, 240],
       "color_seleccionado": [255, 215, 0],
+      "fondo_normal": [41, 90, 73],
+      "fondo_seleccionado": [60, 145, 115],
+      "borde_color": [255, 255, 255],
+      "borde_ancho": 3,
+      "radio": 12,
+      "ancho": 180,
+      "alto": 80,
       "tamano_fuente": 46
     },
     {
@@ -35,15 +49,29 @@
         "Universidad de Oriente",
         "Ingenieria de Sistemas"
       ],
-      "color_normal": [200, 200, 200],
+      "color_normal": [240, 240, 240],
       "color_seleccionado": [255, 215, 0],
+      "fondo_normal": [94, 52, 88],
+      "fondo_seleccionado": [136, 69, 128],
+      "borde_color": [255, 255, 255],
+      "borde_ancho": 3,
+      "radio": 12,
+      "ancho": 210,
+      "alto": 80,
       "tamano_fuente": 46
     },
     {
       "texto": "SALIR",
       "accion": "SALIR",
-      "color_normal": [200, 200, 200],
+      "color_normal": [240, 240, 240],
       "color_seleccionado": [255, 215, 0],
+      "fondo_normal": [108, 42, 42],
+      "fondo_seleccionado": [168, 59, 59],
+      "borde_color": [255, 255, 255],
+      "borde_ancho": 3,
+      "radio": 12,
+      "ancho": 170,
+      "alto": 80,
       "tamano_fuente": 46
     }
   ]

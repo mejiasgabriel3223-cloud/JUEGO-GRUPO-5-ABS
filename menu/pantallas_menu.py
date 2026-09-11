@@ -37,6 +37,7 @@ class PantallaPrincipal(PantallaBase):
         super().__init__(gestor_estado, config)
         self.opciones = self.config.get("opciones_principal", [])
         self.indice_seleccionado = 0
+        self._botones_cache = []
 
         ruta_logo = GestorConfig.resolver_ruta(self.config.get("recursos", {}).get("titulo", ""))
         self.logo = None
@@ -47,15 +48,58 @@ class PantallaPrincipal(PantallaBase):
         except Exception:
             pass
 
+    def _orden_horizontal(self):
+        return self.opciones
+
+    def _calcular_botones(self, pantalla):
+        if pantalla is None:
+            return []
+
+        opciones_visuales = self._orden_horizontal()
+        centro_x = pantalla.get_width() // 2
+        y_base = pantalla.get_height() - 90
+        total = len(opciones_visuales)
+        espacio = 210
+        botones = []
+
+        for index, opcion in enumerate(opciones_visuales):
+            x = centro_x + (index - (total - 1) / 2) * espacio
+            ancho = int(opcion.get("ancho", 170))
+            alto = int(opcion.get("alto", 80))
+            rect = pygame.Rect(0, 0, ancho, alto)
+            rect.center = (x, y_base)
+            botones.append((opcion, rect))
+
+        self._botones_cache = botones
+        return botones
+
     def manejar_eventos(self, eventos):
+        pantalla = self.gestor_estado.pantalla
+        botones = self._calcular_botones(pantalla)
+
         for evento in eventos:
             if evento.type == pygame.KEYDOWN:
-                if evento.key in (pygame.K_UP, pygame.K_w):
+                if evento.key in (pygame.K_LEFT, pygame.K_a):
+                    self.indice_seleccionado = (self.indice_seleccionado - 1) % len(self.opciones)
+                elif evento.key in (pygame.K_RIGHT, pygame.K_d):
+                    self.indice_seleccionado = (self.indice_seleccionado + 1) % len(self.opciones)
+                elif evento.key in (pygame.K_UP, pygame.K_w):
                     self.indice_seleccionado = (self.indice_seleccionado - 1) % len(self.opciones)
                 elif evento.key in (pygame.K_DOWN, pygame.K_s):
                     self.indice_seleccionado = (self.indice_seleccionado + 1) % len(self.opciones)
                 elif evento.key == pygame.K_RETURN:
                     self._ejecutar_accion()
+            elif evento.type == pygame.MOUSEMOTION:
+                for index, (_, rect) in enumerate(botones):
+                    if rect.collidepoint(evento.pos):
+                        self.indice_seleccionado = index
+                        break
+            elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                for index, (_, rect) in enumerate(botones):
+                    if rect.collidepoint(evento.pos):
+                        self.indice_seleccionado = index
+                        self._ejecutar_accion()
+                        break
 
     def _ejecutar_accion(self):
         accion = self.opciones[self.indice_seleccionado].get("accion")
@@ -77,10 +121,25 @@ class PantallaPrincipal(PantallaBase):
             rect_titulo = self.logo.get_rect(midtop=(pantalla.get_width() // 2, 0))
             pantalla.blit(self.logo, rect_titulo)
 
-        start_y = 340
-        for index, opcion in enumerate(self.opciones):
-            color = opcion.get("color_seleccionado") if index == self.indice_seleccionado else opcion.get("color_normal")
-            self.dibujar_texto_centrado(pantalla, opcion.get("texto"), start_y + (index * 58), opcion.get("tamano_fuente", 46), color)
+        botones = self._calcular_botones(pantalla)
+        for index, (opcion, rect) in enumerate(botones):
+            seleccionado = self.indice_seleccionado == index
+            color_texto = opcion.get("color_seleccionado") if seleccionado else opcion.get("color_normal")
+            color_fondo = opcion.get("fondo_seleccionado") if seleccionado else opcion.get("fondo_normal")
+            borde = opcion.get("borde_color", [255, 255, 255])
+            borde_ancho = int(opcion.get("borde_ancho", 3))
+            radio = int(opcion.get("radio", 12))
+
+            panel = pygame.Surface(rect.size, pygame.SRCALPHA)
+            panel.fill((0, 0, 0, 0))
+            pygame.draw.rect(panel, color_fondo, panel.get_rect(), border_radius=radio)
+            pygame.draw.rect(panel, borde, panel.get_rect(), width=borde_ancho, border_radius=radio)
+            pantalla.blit(panel, rect.topleft)
+
+            fuente = self.obtener_fuente(opcion.get("tamano_fuente", 46))
+            render = fuente.render(opcion.get("texto"), True, color_texto)
+            texto_rect = render.get_rect(center=rect.center)
+            pantalla.blit(render, texto_rect)
 
 
 class PantallaTexto(PantallaBase):
