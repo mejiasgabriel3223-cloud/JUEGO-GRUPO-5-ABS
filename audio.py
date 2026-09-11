@@ -7,8 +7,8 @@ import pygame as py
 class SoundPlayer:
     def __init__(self):
         py.mixer.init()
-        self.menu_music = Path("assets(beta)/audio/music.mp3")
-        self.game_music = Path("assets(beta)/audio/game_music.mp3")
+        self.menu_music = Path("assets(beta)/audio/MENUMUSIC.mp3")
+        self.game_music = Path("assets(beta)/audio/GAMEMUSIC.mp3")
 
     def _play_track(self, track_path):
         py.mixer.music.stop()
