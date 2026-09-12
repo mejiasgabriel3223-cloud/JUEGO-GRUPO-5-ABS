@@ -6,6 +6,7 @@ Descripción: Estado de fin de juego (Game Over) ultra-seguro contra cierres.
 import json
 from pathlib import Path
 import pygame
+from audio import get_audio_manager
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -16,6 +17,7 @@ class GameOverState:
     def __init__(self, screen, context=None):
         self.screen = screen
         self.context = context if context is not None else {}
+        self.audio = get_audio_manager()
         self.records_file = BASE_DIR / "records.json"
 
         self.score = 0
@@ -39,6 +41,7 @@ class GameOverState:
 
     def enter(self):
         """Se ejecuta al entrar al Game Over."""
+        self.audio.stop_music()
         try:
             self.score = self.context.get("score", 0) if self.context else 0
             self.player_name = self.context.get("player_name", "Jugador") if self.context else "Jugador"

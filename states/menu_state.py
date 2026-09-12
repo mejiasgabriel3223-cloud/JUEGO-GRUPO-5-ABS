@@ -8,6 +8,7 @@ import json
 from abc import ABC, abstractmethod
 from pathlib import Path
 import pygame
+from audio import get_audio_manager
 
 try:
     import cv2
@@ -320,6 +321,7 @@ class MenuState:
         self.screen = screen
         self.pantalla = screen
         self.context = context if context is not None else {}
+        self.audio = get_audio_manager()
         self.config = GestorConfig.cargar_configuracion()
         self.senal_salida = None
         self.player_name = "Jugador"
@@ -357,11 +359,12 @@ class MenuState:
 
     def enter(self):
         self.senal_salida = None
+        self.audio.play_menu_music()
         if self.cap:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     def exit(self):
-        pass
+        self.audio.stop_music()
 
     def cambiar_estado(self, nombre_estado):
         if nombre_estado in self.pantallas:

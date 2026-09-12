@@ -1,36 +1,28 @@
-He actualizado el contenido documental considerando el código y archivos adjuntos. Sustituye `DOCUMENTACION_PROYECTO.md` por:
+# Running Time! - Documentacion tecnica
 
-````markdown
-# Running Time! — Documentación técnica
-
-**Fecha de revisión:** 2026-09-10  
+**Fecha de revision:** 2026-09-12  
 **Estado:** prototipo jugable de cartas en Pygame
 
 ## 1. Resumen
 
-El proyecto es un juego de cartas desarrollado con Python y Pygame. Aunque conserva nombres heredados de un prototipo de carreras (`CarreraDeObstaculos`), la implementación actual utiliza:
+El proyecto es un juego de cartas desarrollado con Python y Pygame. La implementacion actual incluye menu, entrada de nombre, records, mano de cartas, evaluacion de combinaciones, puntuacion, Jokers, descartes, reposicion, rondas y una animacion modular para las cartas jugadas.
 
-- Cartas españolas y cartas tipo póker.
-- Selección de cartas con el ratón.
-- Evaluación de combinaciones.
-- Sistema de puntuación y multiplicadores.
-- Jokers con activación probabilística.
-- Descarte y reposición de cartas.
-- Tres rondas con objetivos progresivos.
-- Menú, entrada de nombre, records y pantalla de game over.
+El punto de entrada real es `main.py`. `game.py` conserva un controlador anterior compatible, pero el flujo actual basado en `states/` no lo utiliza.
 
-El núcleo de cartas ya está conectado al flujo principal mediante `game.py` y `Renderer.py`.
-
-## 2. Ejecución
-
-### Requisitos
+## 2. Requisitos y ejecucion
 
 - Python 3.10 o superior.
 - Pygame 2.5 o superior.
+- OpenCV opcional para el video de fondo del menu.
 
-### Instalación en Windows
+Dependencias de `requirements.txt`:
 
-Desde la carpeta raíz del proyecto:
+```text
+pygame>=2.5
+opencv-python-headless>=4.10.0
+```
+
+Instalacion en Windows:
 
 ```powershell
 py -m venv .venv
@@ -39,420 +31,295 @@ py -m pip install -r requirements.txt
 py main.py
 ```
 
-Si PowerShell bloquea la activación:
+Si PowerShell bloquea la activacion:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
 ```
 
-## 3. Flujo de estados
+Tambien puede ejecutarse con:
 
-```text
-MENU
-  -> NAME_INPUT
-  -> SELECTOR
-  -> JUGANDO
-  -> GAMEOVER
-  -> MENU
+```powershell
+.venv\Scripts\python.exe main.py
 ```
 
-### MENU
+## 3. Bucle principal
 
-Gestionado por `menu/estado_menu.py`.
+`main.py` inicializa Pygame, crea los estados y ejecuta este ciclo por frame:
 
-Incluye:
+```text
+pygame.event.get()
+        |
+current_state.handle_events(events)
+        |
+current_state.update(dt)
+        |
+current_state.draw(screen)
+        |
+pygame.display.flip()
+```
 
-- Jugar.
-- Records.
-- Créditos.
-- Salir.
-- Navegación con flechas o W/S.
-- Confirmación con ENTER.
+`handle_events()` y `update()` pueden devolver el nombre de un estado destino. `main.py` decide entonces si cambia de estado.
 
-### NAME_INPUT
+Estados registrados actualmente:
 
-Permite introducir el nombre del jugador.
+```text
+MENU <-----------------------------+
+  |                                |
+  +--> PLAY -----------------------+
+          |                        |
+          +--> GAME_OVER ----------+
+          +--> VICTORY (finaliza)
+          +--> SHOP (reinicia ronda)
+```
 
-- Máximo: 16 caracteres.
-- BACKSPACE elimina caracteres.
-- ENTER confirma.
-- Si se deja vacío, se usa `Jugador`.
-- ESC cancela.
+La transicion a `SHOP` se resuelve actualmente reiniciando la ronda. `VICTORY` y `GAME_OVER` hacen que el `main.py` actual termine el programa; `GameOverState` esta preparado para un flujo posterior de reintento y menu.
 
-### SELECTOR
+## 4. Estados
 
-Actualmente utiliza `SelectorDummy`.
+### `states/base_state.py`
 
-No existe todavía un selector visual real de personajes. Al pulsar ENTER o ESPACIO se selecciona automáticamente `Player`.
+Define el contrato comun:
 
-### JUGANDO
+- `handle_events(events)`: procesa entradas.
+- `update(dt)`: actualiza logica y puede devolver una transicion.
+- `draw(screen)`: dibuja el estado.
 
-La partida de cartas se controla desde `CarreraDeObstaculos`.
+### `states/menu_state.py`
 
-Características actuales:
+`MenuState` gestiona las pantallas internas:
 
-- Mano inicial de 8 cartas.
-- Se pueden seleccionar entre 1 y 5 cartas.
-- Se pueden jugar manos con ESPACIO o ENTER.
-- Se pueden descartar cartas con D.
-- Las cartas jugadas o descartadas se reemplazan.
-- La ronda tiene 4 manos y 3 descartes.
-- El objetivo inicial es 100 puntos.
-- Se juegan hasta 3 rondas.
-- El objetivo aumenta en cada ronda.
+```text
+PRINCIPAL
+  +--> NAME_INPUT
+  +--> RECORDS
+  +--> REPLACE_PROMPT
+```
 
-### GAMEOVER
+Responsabilidades:
 
-Se muestra cuando:
+- Cargar la configuracion del menu.
+- Mostrar logo y botones.
+- Leer el nombre del jugador.
+- Cargar y guardar `records.json`.
+- Actualizar el video de fondo cuando OpenCV esta disponible.
+- Devolver `PLAY` al confirmar el nombre.
 
-- Se agotan las manos disponibles.
-- Se completan las rondas configuradas.
+Si el video no esta disponible, usa un fondo de color como fallback.
 
-Controles:
+### `states/play_state.py`
 
-- ENTER reinicia la partida.
-- ESC vuelve al menú y guarda el resultado.
+Es el estado principal de la partida. Controla:
 
-## 4. Controles
+- Mano y seleccion de cartas.
+- Evaluacion mediante `GameRules`.
+- Activacion de Jokers.
+- Score de la ronda.
+- Manos y descartes disponibles.
+- Reposicion y barajado.
+- Objetivo y ronda actual.
+- Integracion del sistema de animaciones.
 
-| Acción | Control |
-|---|---|
-| Navegar por el menú | Flechas o W/S |
-| Confirmar menú | ENTER |
-| Escribir nombre | Teclado |
-| Borrar nombre | BACKSPACE |
-| Seleccionar carta | Clic izquierdo |
-| Jugar cartas | ESPACIO o ENTER |
-| Descartar cartas | D |
-| Volver al menú | ESC |
-| Reiniciar game over | ENTER |
+Flujo de una jugada:
 
-## 5. Arquitectura
+```text
+seleccionar cartas
+        |
+SPACE o ENTER
+        |
+validar seleccion
+        |
+obtener la mejor mano
+        |
+guardar posiciones visuales
+        |
+evaluar y activar Jokers
+        |
+calcular resultado final
+        |
+actualizar score y manos
+        |
+iniciar animacion
+        |
+retirar y reponer cartas
+```
+
+Mientras una animacion esta activa, el estado bloquea la seleccion y las nuevas jugadas. `SPACE` avanza la animacion de cartas jugadas y `ESC` la cancela y solicita volver al menu.
+
+### `states/gameover_state.py`
+
+Lee el score y el nombre desde `context`, guarda el record y muestra controles para reintentar o volver al menu. Su uso completo requiere conectar la respuesta `GAME_OVER` desde `main.py`.
+
+## 5. Arquitectura de modulos
 
 ```text
 main.py
-├── Máquina de estados
-├── Inicialización de Pygame
-├── Audio
-├── EstadoMenu
-└── CarreraDeObstaculos
-    ├── Renderer
-    ├── CardFactory
-    ├── EntityCollection
-    ├── GameRules
-    └── RandomJokerPool
+  |
+  +--> states/
+  |      +--> menu_state.py
+  |      +--> play_state.py
+  |      +--> gameover_state.py
+  |      +--> base_state.py
+  |
+  +--> PlayState
+         +--> entities/
+         +--> Renderer.py
+         +--> animaciones.py
 ```
-
-### `main.py`
-
-Es el punto de entrada.
-
-Responsabilidades:
-
-- Inicializar Pygame.
-- Crear la ventana.
-- Crear el reloj principal.
-- Gestionar eventos globales.
-- Cambiar entre estados.
-- Guardar records al abandonar game over.
-
-### `game.py`
-
-Funciona como adaptador entre la máquina de estados existente y la nueva lógica de cartas.
-
-La clase `CarreraDeObstaculos` conserva el nombre antiguo para mantener compatibilidad con `main.py`, pero actualmente representa el controlador de la partida de cartas.
-
-Responsabilidades:
-
-- Crear y reiniciar partidas.
-- Gestionar cartas seleccionadas.
-- Jugar y descartar cartas.
-- Actualizar rondas y objetivos.
-- Coordinar reglas, Jokers y renderer.
-- Exponer el score al sistema de records.
 
 ### `Renderer.py`
 
-Dibuja la interfaz de cartas:
+Dibuja el HUD, Jokers, mano y cartas. Recibe datos serializados mediante `CardEntity.to_dict()`. La representacion actual puede funcionar sin cargar todas las imagenes de los assets.
 
-- HUD.
-- Puntuación.
-- Objetivo.
-- Fichas y multiplicador.
-- Jokers.
-- Mano de cartas.
-- Cartas seleccionadas.
-- Consumibles.
+### `entities/`
 
-Actualmente dibuja cartas mediante texto (`rank` y `suit`), no mediante imágenes de los assets.
+Contiene la logica del dominio:
 
-### `entities/entities.py`
+- `entities.py`: `Entity`, `CardEntity` y `EntityCollection`.
+- `card_factory.py`: creacion aleatoria, `pygame.Rect` y rutas de assets.
+- `rules.py`: combinaciones, scores, multiplicadores y `HandResult`.
+- `jokers.py`: Jokers y activacion probabilistica.
+- `__init__.py`: API publica.
 
-Contiene:
+`EntityCollection` permite duplicados, crecimiento, reduccion, eliminacion y barajado.
 
-- `Entity`.
-- `CardEntity`.
-- `EntityCollection`.
+### `game.py`
 
-`EntityCollection` permite:
+Contiene `CarreraDeObstaculos`, un adaptador de una version anterior. Incluye una integracion propia de `PlayAnimation`, pero no forma parte del flujo activo basado en `states/`. Las nuevas animaciones deben agregarse en `animaciones.py` y conectarse desde `PlayState`.
 
-- Duplicados.
-- Crecimiento y reducción.
-- Eliminación.
-- Barajado.
-- Recorrido como secuencia.
+## 6. Puntuacion
 
-### `entities/card_factory.py`
-
-Crea cartas aleatorias y asigna:
-
-- Rango.
-- Palo.
-- Score base.
-- Multiplicador.
-- `pygame.Rect`.
-- Ruta esperada del asset.
-
-### `entities/rules.py`
-
-Evalúa las jugadas:
-
-- High Card.
-- Pair.
-- Two Pair.
-- Three of a Kind.
-- Straight.
-- Flush.
-- Full House.
-- Four of a Kind.
-- Straight Flush.
-
-El resultado se representa mediante `HandResult`.
-
-### `entities/jokers.py`
-
-Contiene Jokers polimórficos:
-
-- `FlatChipsJoker`: aumenta el score de las cartas.
-- `MultiplierJoker`: aumenta el multiplicador.
-- `RandomJokerPool`: activa Jokers según probabilidad.
-
-## 6. Puntuación
-
-El resultado general sigue este modelo:
+La evaluacion combina valores globales, la combinacion detectada y los modificadores de cada carta:
 
 ```text
-puntuación total =
-(score global + score de la combinación + score de las cartas)
-× multiplicador
+score final = score global
+           + score de la combinacion
+           + score de cada carta
+
+multiplicador final = multiplicador global
+                    + multiplicador de cada carta
+
+total = score final * multiplicador final
 ```
 
-Los Jokers pueden modificar los valores de las cartas antes de la evaluación final.
+Los Jokers modifican cartas antes de la evaluacion final. `round_score` acumula los puntos de la ronda actual; todavia no existe un `total_score` separado para toda la partida.
 
-El atributo `round_score` se utiliza como puntuación acumulada de la ronda actual.
+## 7. Controles
 
-## 7. Records
+| Accion | Control |
+|---|---|
+| Navegar menu | Flechas o W/S |
+| Confirmar opcion | ENTER |
+| Escribir nombre | Teclado |
+| Borrar nombre | BACKSPACE |
+| Seleccionar carta | Clic izquierdo |
+| Jugar cartas | SPACE o ENTER |
+| Descartar cartas | D |
+| Avanzar animacion | SPACE |
+| Cancelar animacion | ESC |
+| Volver al menu | ESC |
 
-Los records se almacenan en `records.json`.
+## 8. Animaciones
 
-Formato:
-
-```json
-[
-  {
-    "name": "Jugador",
-    "score": 250
-  }
-]
-```
-
-El menú:
-
-- Carga los records al iniciar.
-- Ordena por puntuación.
-- Muestra los mejores resultados.
-- Guarda el resultado al abandonar GAMEOVER con ESC.
-
-### Problema actual
-
-La puntuación se reinicia al comenzar cada ronda:
-
-```python
-self.round_score = 0
-```
-
-Por ello, al completar las tres rondas el score final puede no representar la puntuación total de la partida. Debe definirse si se necesita:
-
-- `round_score`: puntuación de la ronda.
-- `total_score`: puntuación acumulada de toda la partida.
-
-## 8. Assets
-
-La carpeta `assets(beta)` contiene:
+`animaciones.py` contiene `PlayAnimation`, que muestra las cartas jugadas en el centro, y `RefillAnimation`, que introduce las cartas nuevas desde la esquina inferior derecha. `AnimationController` es la fachada que utiliza `PlayState`.
 
 ```text
+PlayState
+  +--> AnimationController
+                                        +--> PlayAnimation
+                                        +--> RefillAnimation
+```
+
+El estado solo informa las cartas y sus posiciones finales mediante `play_cards()` y `refill_cards()`. Las fases, duraciones, cola, interpolacion y dibujo permanecen en `animaciones.py`.
+
+La reposicion se encola mientras las cartas jugadas estan en el centro. Cuando terminan de salir por la derecha, `AnimationController` inicia `RefillAnimation`. La mano normal continua visible y excluye temporalmente las cartas nuevas para evitar que aparezcan duplicadas.
+
+La guia completa para modificar o agregar animaciones esta en [README_ANIMACIONES.md](README_ANIMACIONES.md).
+
+## 9. Records, configuracion y assets
+
+### Records
+
+`records.json` contiene objetos con `name` y `score`. `MenuState` los carga, ordena y guarda.
+
+### Configuracion
+
+`settings.py` define:
+
+- Resolucion: `1280 x 720`.
+- Frecuencia objetivo: `60 FPS`.
+- Directorio base y assets.
+- Fuente con fallback de Pygame.
+
+### Assets
+
+Las carpetas principales son:
+
+```text
+assets/
 assets(beta)/
-├── audio/
-├── cards/
-│   ├── dark/
-│   └── light/
-└── cartas_Españolas/
-    └── Baraja_española_completa.xcf
+  audio/
+  cards/
+  cartas_Españolas/
 ```
 
-También existen archivos de macOS que no deberían distribuirse:
-
-```text
-__MACOSX/
-._*
-.DS_Store
-```
-
-### Estado de integración
-
-Los assets están presentes, pero el renderer actual no carga imágenes. La interfaz genera visualmente las cartas mediante rectángulos, texto y colores.
-
-La baraja española está almacenada principalmente como archivo `.xcf`, que no es cargable directamente por Pygame. Se recomienda exportarla a PNG.
-
-## 9. Configuración
-
-### `settings.py`
-
-Define:
-
-- Resolución: `1280 × 720`.
-- FPS: `60`.
-- Directorio base.
-- Directorio de assets.
-- Carga de fuentes con fallback.
-
-La fuente configurada es:
-
-```text
-assets/tu_fuente.ttf
-```
-
-Ese archivo no está confirmado en los assets adjuntos. Si no existe, se utiliza la fuente predeterminada de Pygame.
-
-### `requirements.txt`
-
-```text
-pygame>=2.5
-```
+`CardFactory` conserva rutas de assets en las cartas. Los archivos `__MACOSX`, `._*` y `.DS_Store` son metadatos y no forman parte de la logica del juego.
 
 ## 10. Audio
 
-`audio.py` contiene `SoundPlayer`.
+`audio.py` contiene `AudioManager`, un servicio compartido y tolerante a fallos. Los states lo obtienen mediante `get_audio_manager()` y no inicializan el mixer directamente.
 
-Actualmente el audio funciona como una capa de compatibilidad o simulación. Debe verificarse si:
+Integracion actual:
 
-- Inicializa realmente el mixer.
-- Carga archivos desde `assets(beta)/audio`.
-- Reproduce música y efectos.
-- Gestiona errores de archivos inexistentes.
+```text
+MenuState      -> play_menu_music()
+PlayState      -> play_game_music()
+GameOverState  -> stop_music()
+```
+
+Las pistas disponibles son:
+
+```text
+assets(beta)/audio/MENUMUSIC.mp3
+assets(beta)/audio/GAMEMUSIC.mp3
+```
+
+Si el mixer no puede inicializarse o falta un archivo, el juego continua sin audio. `play_sfx()` ya esta preparado para efectos futuros, aunque actualmente no hay archivos `.wav` u `.ogg` en la carpeta de audio.
+
+La clase `SoundPlayer` se conserva como alias de compatibilidad. La guia para agregar pistas, efectos y nuevos eventos esta en [README_AUDIO.md](README_AUDIO.md).
 
 ## 11. Pruebas
 
-Existe:
+La suite disponible esta en `tests/test_entities.py` y cubre colecciones, cartas, Jokers y reglas.
 
-```text
-tests/test_entities.py
-```
-
-Debe ejecutarse con:
+Ejecutar:
 
 ```powershell
-py -m unittest discover -s tests -v
+.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-También puede utilizarse pytest si se incorpora como dependencia:
+Comprobar sintaxis del sistema de animaciones:
 
 ```powershell
-py -m pytest -v
+.venv\Scripts\python.exe -m py_compile animaciones.py states/play_state.py
 ```
 
-No se dispone de evidencia suficiente para confirmar que todas las pruebas actuales pasan correctamente.
+Faltan pruebas de estados, transiciones, bloqueo de entradas y ciclo de vida de animaciones.
 
-## 12. Problemas detectados
+## 12. Limitaciones conocidas
 
-### Prioridad alta
+1. `GAME_OVER` y `VICTORY` no tienen todavia una transicion visual completa desde `main.py`.
+2. `SHOP` no es un estado independiente.
+3. `round_score` no esta separado de un score total de partida.
+4. `game.py` conserva nombres heredados y logica duplicada.
+5. La cobertura automatizada se concentra en `entities/`.
+6. La carga de imagenes de cartas no esta completamente integrada.
 
-1. `SelectorDummy` no es un selector real.
-2. ESC en el selector no cambia explícitamente al estado `MENU`.
-3. La puntuación total de la partida no está separada de la puntuación de ronda.
-4. El resultado de victoria puede terminar guardándose con una puntuación incorrecta.
-5. Los assets de cartas no están integrados visualmente.
-6. `game.py` conserva nombres heredados del prototipo de carreras.
-7. `self.rules.apply_result` se crea dinámicamente dentro de `play_selected()` y debería eliminarse.
-8. El renderer llama `present()` internamente, mezclando lógica de actualización y presentación.
+## 13. Recomendaciones
 
-### Prioridad media
-
-1. Validar y limpiar `records.json`.
-2. Evitar records duplicados según una política definida.
-3. Sustituir excepciones generales por excepciones específicas.
-4. Centralizar colores y fuentes.
-5. Añadir mensajes de error para assets ausentes.
-6. Separar la lógica del dominio de Pygame en `CardFactory`.
-7. Añadir pruebas para puntuación, rondas, Jokers y persistencia.
-
-### Prioridad baja
-
-1. Añadir animaciones.
-2. Añadir sonidos reales.
-3. Añadir personajes visuales.
-4. Añadir consumibles funcionales.
-5. Crear un instalador o ejecutable.
-
-## 13. Estado por componente
-
-| Componente | Estado |
-|---|---|
-| `main.py` | Funcional |
-| `game.py` | Juego de cartas jugable en estado prototipo |
-| `Renderer.py` | Funcional, sin imágenes reales |
-| `entities/` | Arquitectura de dominio implementada |
-| `menu/` | Funcional, requiere revisión de configuración |
-| `audio.py` | Pendiente de confirmar integración real |
-| `settings.py` | Funcional con fallback de fuente |
-| `records.json` | Funcional, sin validación completa |
-| `assets/` | Insuficientes o no conectados |
-| `assets(beta)/cards` | Presentes, no utilizados directamente |
-| `tests/` | Existe una prueba, cobertura limitada |
-| `README.md` | Insuficiente y guardado en UTF-16 |
-| `README_INTEGRATION.md` | Documenta la integración de entities |
-| `README_ENTITIES.md` | Documenta la arquitectura de entidades |
-
-## 14. Recomendaciones
-
-### Inmediatas
-
-1. Renombrar `CarreraDeObstaculos` a un nombre relacionado con cartas, manteniendo un alias temporal.
-2. Crear un selector de modo o eliminar la pantalla de personajes.
-3. Separar `total_score` de `round_score`.
-4. Corregir el guardado del score al completar una partida.
-5. Integrar imágenes PNG de cartas.
-6. Corregir el retorno desde SELECTOR mediante ESC.
-7. Ejecutar y completar las pruebas automatizadas.
-
-### Antes de entregar
-
-- Actualizar `README.md`.
-- Guardar el README en UTF-8.
-- Añadir instrucciones de instalación.
-- Eliminar `__MACOSX`, `.DS_Store` y archivos `._*`.
-- Confirmar las rutas de assets.
-- Definir una política para records duplicados.
-- Añadir pruebas de integración del flujo completo.
-- Confirmar que el audio funciona o documentarlo como simulación.
-
-## 15. Veredicto
-
-El proyecto evolucionó desde un prototipo de carreras hacia un juego de cartas. Actualmente existe una arquitectura funcional con entidades, reglas, Jokers, puntuación, renderer y flujo de menú.
-
-El estado actual es:
-
-> **Prototipo jugable de cartas con integración parcial de assets, records y audio.**
-
-La prioridad ya no es implementar el núcleo básico de cartas, sino terminar la integración visual, corregir la puntuación global, completar las pruebas y eliminar los elementos heredados del prototipo de carreras.
-````
+1. Conectar `GAME_OVER` con `GameOverState` en `main.py`.
+2. Crear estados reales para tienda y victoria.
+3. Separar `round_score` de `total_score`.
+4. Agregar pruebas de `PlayState` y `AnimationController`.
+5. Mantener `game.py` como compatibilidad temporal y no agregarle nueva logica.
+6. Incorporar futuras animaciones mediante la API de `README_ANIMACIONES.md`.

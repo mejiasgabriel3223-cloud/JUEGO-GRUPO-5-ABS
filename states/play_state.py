@@ -15,6 +15,8 @@ from states.base_state import BaseState
 
 # Importación del renderizador de interfaz gráfica
 from Renderer import Renderer
+from animaciones import AnimationController
+from audio import get_audio_manager
 
 # Importaciones de entidades del dominio del juego (cartas, jokers, reglas)
 from entities import (
@@ -55,9 +57,12 @@ class PlayState(BaseState):
         # Referencias a la pantalla principal y al contexto de datos persistentes
         self.screen = screen
         self.context = context if context is not None else {}
+        self.audio = get_audio_manager()
         
         # Inicialización del subsistema gráfico pasando las dimensiones de la ventana
         self.renderer = Renderer(*screen.get_size(), screen=screen)
+        # Inicialización del controlador de animaciones para jugadas y efectos visuales
+        self.animations = AnimationController()
         
         # Instanciación del evaluador de combinaciones de póker y puntuación
         self.rules = GameRules()
@@ -94,6 +99,7 @@ class PlayState(BaseState):
 
     def enter(self):
         """Método de entrada al estado de juego llamado por game.py/main.py."""
+        self.audio.play_game_music()
         if hasattr(self, "context") and self.context:
             self.player_name = self.context.get("player_name", "Jugador")
             # Si venimos de un Game Over o inicio nuevo, leemos o preparamos el acumulado
@@ -105,8 +111,9 @@ class PlayState(BaseState):
 
     def exit(self):
         """Método de salida del estado de juego llamado por main.py."""
-        # Aquí puedes pausar/detener la música del nivel si aplica
-        pass
+        # Cancela cualquier animación en curso al salir del estado
+        self.animations.cancel()
+        self.audio.stop_music()
 
     def _project_root(self) -> Path:
         """
@@ -195,6 +202,14 @@ class PlayState(BaseState):
         """
         # Recorre la cola de eventos capturados por Pygame
         for event in events:
+            # Si hay una animación activa, prioriza su manejo de eventos
+            if self.animations.active:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self.animations.cancel()
+                    return "MENU"
+                self.animations.handle_event(event)
+                continue
+
             # Evalúa eventos de pulsación de teclas del teclado
             if event.type == pygame.KEYDOWN:
                 # Tecla ESCAPE: solicita salir al menú principal/pausa
@@ -221,6 +236,9 @@ class PlayState(BaseState):
         """
         Actualiza la lógica de juego y evalúa condiciones de victoria o derrota.
         """
+        # Actualiza el subsistema de animaciones con el delta time (dt) del frame actual
+        self.animations.update(dt)
+
         # 1. Comprobación de condición de victoria de la ronda
         if self.round_score >= self.target:
             self.round_number += 1
@@ -264,6 +282,15 @@ class PlayState(BaseState):
 
         # Obtiene la mejor combinación de 5 cartas según las reglas de póker
         best = self.rules.best_five(selected)
+
+        # Conserva las posiciones antes de retirar las cartas de la mano.
+        # Esto es necesario para la animación de salida de cartas jugadas.
+        self._sync_card_rects()
+        start_positions = [
+            (card.rect.x, card.rect.y)
+            for card in best
+            if card.rect is not None
+        ]
         
         # Realiza una evaluación previa de la mano
         self.rules.evaluate(best)
@@ -282,6 +309,13 @@ class PlayState(BaseState):
         
         # Descuenta un intento de mano al jugador
         self.hands_left -= 1
+#        # Inicia la animación de salida de las cartas jugadas y despliegue de puntos
+        self.animations.play_cards(
+            list(best),
+            start_positions,
+            result.name,
+            result.total,
+        )
 
         # Elimina de la mano las cartas que acaban de ser jugadas
         for card in selected:
@@ -290,11 +324,22 @@ class PlayState(BaseState):
         # Determina cuántas cartas faltan para reponer la mano al máximo
         missing = self.MAX_HAND_SIZE - len(self.cards)
         
-        # Genera nuevas cartas y las agrega a la mano activa
-        self.cards.add_many(self.card_factory.create_random_collection(missing))
+        # Conservamos la referencia de las cartas nuevas para poder animarlas.
+        new_cards = self.card_factory.create_random_collection(missing)
+        self.cards.add_many(new_cards)
         
         # Mezcla las cartas de la mano para desordenarlas
         self.cards.shuffle()
+
+        # Una vez mezclada la mano, sus Rect contienen las posiciones finales.
+        # PlayState solo entrega datos; el movimiento se mantiene en animaciones.py.
+        self._sync_card_rects()
+        refill_positions = [
+            (card.rect.x, card.rect.y)
+            for card in new_cards
+            if card.rect is not None
+        ]
+        self.animations.refill_cards(new_cards, refill_positions)
 
         # Genera el mensaje de estado para el HUD mostrando jugada, puntos y Jokers que actuaron
         if activated:
@@ -335,11 +380,21 @@ class PlayState(BaseState):
         # Calcula la cantidad de cartas faltantes en la mano
         missing = self.MAX_HAND_SIZE - len(self.cards)
         
-        # Crea e inserta cartas aleatorias de reemplazo
-        self.cards.add_many(self.card_factory.create_random_collection(missing))
+        # Separamos las cartas nuevas para que la animacion sepa cuales introducir.
+        new_cards = self.card_factory.create_random_collection(missing)
+        self.cards.add_many(new_cards)
         
         # Mezcla la mano resultante
         self.cards.shuffle()
+
+        # La mano ya esta ordenada; capturamos solo los destinos de las cartas nuevas.
+        self._sync_card_rects()
+        refill_positions = [
+            (card.rect.x, card.rect.y)
+            for card in new_cards
+            if card.rect is not None
+        ]
+        self.animations.refill_cards(new_cards, refill_positions)
         
         # Actualiza el mensaje informativo en la interfaz gráfica
         self.message = f"Discarded {len(selected)} cards"
@@ -412,10 +467,22 @@ class PlayState(BaseState):
         ])
 
         # Convierte las cartas a diccionarios serializados para consumo del Renderer
-        card_data = [card.to_dict() for card in self.cards]
-        
-        # Renderiza las imágenes/texturas de las cartas de la mano
+        # La mano normal permanece visible durante la secuencia de animaciones.
+        # Excluimos cualquier carta que el controlador dibuje temporalmente:
+        # jugadas en el centro, reposiciones pendientes o cartas entrando.
+        # Esto impide que una misma entidad aparezca dos veces en pantalla.
+        animated_card_ids = self.animations.animated_card_ids
+        card_data = [
+            card.to_dict()
+            for card in self.cards
+            if id(card) not in animated_card_ids
+        ]
         self.renderer.draw_hand(card_data)
+
+        # Las animaciones se dibujan encima de la mano normal. Asi las cartas
+        # no seleccionadas permanecen visibles mientras otras se desplazan.
+        if self.animations.active:
+            self.animations.draw(self.renderer, target_screen)
         
         # Crea la tipografía y renderiza la superficie del texto de mensajes informativos
         font = pygame.font.SysFont("Arial", 22, bold=True)
