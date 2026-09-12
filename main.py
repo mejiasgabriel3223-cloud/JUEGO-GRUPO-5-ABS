@@ -1,109 +1,122 @@
-# main.py
-import pygame
-import sys
-from settings import S_WIDTH, S_HEIGHT, FPS
-from menu.estado_menu import EstadoMenu  # Importado desde el nuevo módulo modular
-from game import CarreraDeObstaculos
-from audio import SoundPlayer
+"""
+Módulo: main.py
+Descripción: Punto de entrada principal para el juego. Inicializa Pygame,
+             gestiona la máquina de estados global (MenuState, PlayState)
+             y controla el bucle principal de juego.
+"""
 
-def main():
+import sys
+import pygame
+
+# Importación de configuraciones globales del proyecto
+from settings import S_WIDTH, S_HEIGHT, FPS
+
+# Importación de los estados de juego
+from states.menu_state import MenuState
+from states.play_state import PlayState
+from states.gameover_state import GameOverState
+
+def main() -> None:
+    """Función principal que ejecuta el bucle de eventos y la máquina de estados."""
+    # 1. Inicialización de los módulos internos de Pygame
     pygame.init()
+
+    # 2. Creación de la superficie de la pantalla
     screen = pygame.display.set_mode((S_WIDTH, S_HEIGHT))
-    # Actualizado con el nombre oficial de tu proyecto
-    pygame.display.set_caption("Running Time!") 
+    
+    # 3. Configuración del título de la ventana
+    pygame.display.set_caption("Juego de Cartas - Balatro Style")
+
+    # 4. Control de la tasa de refresco (FPS)
     clock = pygame.time.Clock()
 
-    sound_player = SoundPlayer()
-    menu = EstadoMenu(screen)
-    juego = CarreraDeObstaculos(screen)
-    
-    juego.sound_player = sound_player
-    menu.sound_player = sound_player
-    sound_player.play_menu_music()
+    # 5. Diccionario de contexto global para compartir datos entre estados (puntuaciones, ronda, etc.)
+    context = {"round": 1}
 
-    estado_actual = "MENU"
+    # 6. Inicialización de la máquina de estados
+    # Creamos las instancias de cada estado disponible
+    menu_state = MenuState(screen=screen)
+    play_state = PlayState(screen=screen, context=context)
+    gameover_state = GameOverState(screen=screen, context=context)
+    # Registro de estados en un diccionario para alternar fácilmente entre ellos
+    states = {
+        "MENU": menu_state,
+        "PLAY": play_state,
+        "GAME_OVER": gameover_state
+    }
+
+    # Asignamos MENU como el estado inicial de la aplicación
+    current_state_key = "MENU"
+    current_state = states[current_state_key]
+    current_state.enter()  # Dispara la música/lógica de entrada del menú
+
+    # 7. Control del bucle principal
     running = True
 
     while running:
+        # Calcula el delta time (dt) en segundos
         dt = clock.tick(FPS) / 1000.0
+
+        # Obtiene la lista de eventos ocurridos en este fotograma
         events = pygame.event.get()
 
-        # 1. Procesamiento global de eventos (Cierre de ventana)
+        # Procesa eventos globales del sistema (como cerrar la ventana desde la X)
         for event in events:
             if event.type == pygame.QUIT:
                 running = False
 
-        # 2. Máquina de Estados Principal
-        if estado_actual == "MENU":
-            # El menú modular retorna comandos como "JUGANDO" o "SALIR"
-            resultado = menu.manejar_eventos(events)
-            
-            if resultado == "JUGANDO":
-                # Usamos getattr para mayor seguridad al extraer el nombre del menú modular
-                juego.player_name = getattr(menu, 'player_name', "Jugador")
-                estado_actual = "SELECTOR" 
-            elif resultado == "SALIR":
-                running = False
+        # --- GESTIÓN DE EVENTOS DEL ESTADO ACTIVO ---
+        next_state_event = current_state.handle_events(events)
 
-            menu.actualizar()
-            menu.dibujar()
+        # --- ACTUALIZACIÓN DE LÓGICA DEL ESTADO ACTIVO ---
+        next_state_update = current_state.update(dt)
 
-        elif estado_actual == "SELECTOR":
-            for event in events:
-                personaje_elegido = juego.selector.handle_event(event)
-                
-                if personaje_elegido:
-                    juego.personaje_actual = personaje_elegido
-                    juego.reset_game()
-                    sound_player.play_game_music(0) 
-                    estado_actual = "JUGANDO"
-                    
-            juego.selector.draw(screen)
+        # Priorizamos si handle_events o update solicitan un cambio de estado
+        next_state = next_state_event or next_state_update
 
-        elif estado_actual == "JUGANDO":
-            resultado_eventos = juego.handle_events(events)
-            if resultado_eventos == "MENU":
-                estado_actual = "MENU"
-                sound_player.play_menu_music()
+        # --- TRANSICIONES Y CAMBIOS DE ESTADO ---
+        if next_state == "QUIT":
+            running = False
 
-            resultado_update = juego.update(dt)
-            if resultado_update == "GAMEOVER":
-                juego._update_record_summary()
-                estado_actual = "GAMEOVER"
-            elif resultado_update == "MENU":
-                estado_actual = "MENU"
-                score = juego.score // 10
-                
-                # Verificación de seguridad (Duck Typing) para el método de records
-                if hasattr(menu, 'finalizar_partida'):
-                    menu.finalizar_partida(score, juego.player_name)
-                sound_player.play_menu_music()
+        elif next_state == "PLAY" and current_state_key != "PLAY":
+            # Guardamos el nombre ingresado en el menú dentro del contexto si es necesario
+            if hasattr(menu_state, "player_name"):
+                context["player_name"] = menu_state.player_name
 
-            juego.draw()
+            # Cambiamos al estado de juego
+            current_state_key = "PLAY"
+            current_state = states[current_state_key]
+            current_state.enter()
 
-        elif estado_actual == "GAMEOVER":
-            for event in events:
-                if event.type == pygame.KEYDOWN:
-                    if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        juego.reset_game()
-                        sound_player.play_game_music(0)
-                        estado_actual = "JUGANDO"
-                    elif event.key == pygame.K_ESCAPE:
-                        estado_actual = "MENU"
-                        score = juego.score // 10
-                        
-                        if hasattr(menu, 'finalizar_partida'):
-                            menu.finalizar_partida(score, juego.player_name)
-                        sound_player.play_menu_music()
+        elif next_state == "MENU" and current_state_key != "MENU":
+            # Volver al menú principal
+            current_state_key = "MENU"
+            current_state = states[current_state_key]
+            current_state.enter()
 
-            juego.draw()
-            juego.draw_gameover()
+        elif next_state == "SHOP":
+            # Pasa a la siguiente ronda y reinicia los parámetros de la partida
+            play_state.reset_round()
 
-        # 3. Actualización de Pantalla (Renderizado final)
+        elif next_state == "VICTORY":
+            print("¡Felicidades! Has ganado la partida.")
+            running = False
+
+        elif next_state == "GAME_OVER":
+            print("Game Over. Te has quedado sin manos.")
+            running = False
+
+        # --- RENDERIZADO DEL ESTADO ACTIVO ---
+        current_state.draw(screen)
+
+        # Muestra en pantalla el búfer dibujado
         pygame.display.flip()
 
+    # Cierre de Pygame y finalización limpia del sistema
     pygame.quit()
     sys.exit()
 
+
+# Punto de entrada de ejecución del script
 if __name__ == "__main__":
     main()
