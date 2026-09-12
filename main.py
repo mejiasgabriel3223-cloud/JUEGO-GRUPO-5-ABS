@@ -50,6 +50,19 @@ def main() -> None:
     current_state = states[current_state_key]
     current_state.enter()  # Dispara la música/lógica de entrada del menú
 
+    def change_state(next_state_key: str) -> None:
+        """Cierra el estado actual y activa el nuevo estado de forma uniforme."""
+        nonlocal current_state_key, current_state
+
+        if next_state_key not in states or next_state_key == current_state_key:
+            return
+
+        # Cada estado limpia sus recursos antes de que otro tome el control.
+        current_state.exit()
+        current_state_key = next_state_key
+        current_state = states[next_state_key]
+        current_state.enter()
+
     # 7. Control del bucle principal
     running = True
 
@@ -83,16 +96,12 @@ def main() -> None:
             if hasattr(menu_state, "player_name"):
                 context["player_name"] = menu_state.player_name
 
-            # Cambiamos al estado de juego
-            current_state_key = "PLAY"
-            current_state = states[current_state_key]
-            current_state.enter()
+            # La transición centralizada ejecuta exit() y enter() en orden.
+            change_state("PLAY")
 
         elif next_state == "MENU" and current_state_key != "MENU":
-            # Volver al menú principal
-            current_state_key = "MENU"
-            current_state = states[current_state_key]
-            current_state.enter()
+            # Volver al menú libera primero animaciones, audio y datos temporales.
+            change_state("MENU")
 
         elif next_state == "SHOP":
             # Pasa a la siguiente ronda y reinicia los parámetros de la partida
@@ -103,8 +112,9 @@ def main() -> None:
             running = False
 
         elif next_state == "GAME_OVER":
-            print("Game Over. Te has quedado sin manos.")
-            running = False
+            # GameOverState debe convertirse en una pantalla real, no cerrar el juego.
+            # Su enter() guarda el record y su draw() muestra los controles.
+            change_state("GAME_OVER")
 
         # --- RENDERIZADO DEL ESTADO ACTIVO ---
         current_state.draw(screen)

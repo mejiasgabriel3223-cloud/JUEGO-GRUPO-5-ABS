@@ -140,11 +140,7 @@ class RefillAnimation:
 		target_positions: list[tuple[float, float]],
 	) -> None:
 		self.cards = list(cards)
-		# Congelamos los destinos para que el layout posterior de PlayState
-		# no pueda desplazar las cartas mientras están entrando.
-		self.target_positions = [
-			(float(x), float(y)) for x, y in target_positions
-		]
+		self.target_positions = list(target_positions)
 		self.elapsed = 0.0
 
 		if len(self.cards) != len(self.target_positions):
@@ -213,18 +209,12 @@ class AnimationController:
 			self.refill_animation.start(cards, target_positions)
 
 	@property
-	def animated_card_ids(self) -> set[int]:
-		"""Identidades de cartas que el controlador dibuja temporalmente."""
-		animated_cards = {id(card) for card in self.play_cards_animation.cards}
-		animated_cards.update(id(card) for card in self.refill_animation.cards)
-		if self.pending_refill is not None:
-			animated_cards.update(id(card) for card in self.pending_refill[0])
-		return animated_cards
-
-	@property
 	def hidden_card_ids(self) -> set[int]:
-		"""Alias compatible para la API anterior del controlador."""
-		return self.animated_card_ids
+		"""Identidades de cartas que no debe dibujar la mano normal."""
+		hidden_cards = {id(card) for card in self.refill_animation.cards}
+		if self.pending_refill is not None:
+			hidden_cards.update(id(card) for card in self.pending_refill[0])
+		return hidden_cards
 
 	def cancel(self) -> None:
 		self.play_cards_animation.cancel()

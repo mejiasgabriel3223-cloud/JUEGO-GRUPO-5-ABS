@@ -73,7 +73,9 @@ MENU <-----------------------------+
           +--> SHOP (reinicia ronda)
 ```
 
-La transicion a `SHOP` se resuelve actualmente reiniciando la ronda. `VICTORY` y `GAME_OVER` hacen que el `main.py` actual termine el programa; `GameOverState` esta preparado para un flujo posterior de reintento y menu.
+La transicion a `SHOP` se resuelve actualmente reiniciando la ronda. `GAME_OVER` activa ahora `GameOverState`, que guarda el record y permite reintentar o volver al menu. `VICTORY` sigue siendo un cierre temporal del programa porque todavia no existe un estado visual de victoria.
+
+Las transiciones entre estados pasan por una funcion centralizada de `main.py`. Esta funcion llama a `exit()` en el estado anterior y a `enter()` en el nuevo estado, evitando dejar audio, animaciones o datos temporales activos.
 
 ## 4. Estados
 
@@ -148,7 +150,22 @@ Mientras una animacion esta activa, el estado bloquea la seleccion y las nuevas 
 
 ### `states/gameover_state.py`
 
-Lee el score y el nombre desde `context`, guarda el record y muestra controles para reintentar o volver al menu. Su uso completo requiere conectar la respuesta `GAME_OVER` desde `main.py`.
+Lee el score y el nombre desde `context`, guarda el record y muestra controles para reintentar o volver al menu.
+
+Flujo actual:
+
+```text
+PLAY devuelve GAME_OVER
+        |
+main.py cambia a GAME_OVER
+        |
+GameOverState.enter() guarda el record
+        |
+GameOverState.draw() muestra la pantalla
+        |
+ENTER/R -> PLAY
+ESC     -> MENU
+```
 
 ## 5. Arquitectura de modulos
 
@@ -308,7 +325,7 @@ Faltan pruebas de estados, transiciones, bloqueo de entradas y ciclo de vida de 
 
 ## 12. Limitaciones conocidas
 
-1. `GAME_OVER` y `VICTORY` no tienen todavia una transicion visual completa desde `main.py`.
+1. `VICTORY` todavia no tiene una pantalla visual propia.
 2. `SHOP` no es un estado independiente.
 3. `round_score` no esta separado de un score total de partida.
 4. `game.py` conserva nombres heredados y logica duplicada.

@@ -468,14 +468,13 @@ class PlayState(BaseState):
 
         # Convierte las cartas a diccionarios serializados para consumo del Renderer
         # La mano normal permanece visible durante la secuencia de animaciones.
-        # Excluimos cualquier carta que el controlador dibuje temporalmente:
-        # jugadas en el centro, reposiciones pendientes o cartas entrando.
-        # Esto impide que una misma entidad aparezca dos veces en pantalla.
-        animated_card_ids = self.animations.animated_card_ids
+        # Excluimos las cartas nuevas: el controlador las dibuja temporalmente
+        # desde la esquina inferior derecha para evitar que aparezcan duplicadas.
+        hidden_card_ids = self.animations.hidden_card_ids
         card_data = [
             card.to_dict()
             for card in self.cards
-            if id(card) not in animated_card_ids
+            if id(card) not in hidden_card_ids
         ]
         self.renderer.draw_hand(card_data)
 

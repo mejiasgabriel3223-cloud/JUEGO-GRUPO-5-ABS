@@ -121,5 +121,24 @@ class Renderer:
             pos_x = start_x + i * spacing
             self.draw_card(card, pos_x, start_y, is_selected=card.get("selected", False))
 
+    def draw_hand_slots(self, cards_by_slot, total_slots):
+        """Dibuja una mano conservando slots vacios durante una animacion.
+
+        ``draw_hand`` centra una lista segun la cantidad de cartas que recibe.
+        Este metodo usa siempre ``total_slots`` para que ocultar temporalmente
+        una carta no desplace las cartas vecinas ni los destinos animados.
+        """
+        if total_slots <= 0:
+            return
+
+        spacing = 95
+        start_x = (self.width - (total_slots * spacing)) // 2 + 100
+        start_y = self.height - 160
+        for slot_index, card in enumerate(cards_by_slot):
+            if card is None:
+                continue
+            pos_x = start_x + slot_index * spacing
+            self.draw_card(card, pos_x, start_y, is_selected=card.get("selected", False))
+
     def present(self):
         pygame.display.flip()

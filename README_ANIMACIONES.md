@@ -38,7 +38,7 @@ Metodos actuales:
 | `draw(renderer, screen)` | Dibuja la animacion en el frame actual. |
 | `cancel()` | Cancela y limpia la animacion activa. |
 | `active` | Indica si existe una animacion en curso. |
-| `animated_card_ids` | Identidades de cartas que el controlador dibuja temporalmente. |
+| `hidden_card_ids` | Identidades de cartas que la mano normal debe ocultar temporalmente. |
 
 Ejemplo de uso desde un estado:
 
@@ -180,9 +180,7 @@ Los comentarios junto a este bloque en `PlayState` documentan deliberadamente la
 
 La reposicion no comienza al mismo tiempo que `PlayAnimation`. `AnimationController` guarda la solicitud en `pending_refill` y la inicia automaticamente cuando `PlayAnimation` termina su salida.
 
-Durante toda la secuencia, `PlayState` dibuja la mano normal y excluye las cartas animadas mediante `animated_card_ids`. Las cartas no seleccionadas permanecen visibles; las cartas jugadas y nuevas solo las dibuja su animacion correspondiente, evitando duplicados.
-
-Los destinos de `RefillAnimation` se copian al iniciar. Por ello, las llamadas posteriores de `PlayState._sync_card_rects()` no cambian la trayectoria ni el punto final de las cartas que estan entrando.
+Durante toda la secuencia, `PlayState` dibuja la mano normal y excluye las cartas nuevas mediante `hidden_card_ids`. Las cartas no seleccionadas permanecen visibles; las cartas nuevas solo las dibuja `RefillAnimation`, evitando duplicados.
 
 El orden visual es:
 
